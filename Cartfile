@@ -1,8 +1,16 @@
+<<<<<<< HEAD
 github "rsilvers129/LoopKit" "FPU-dev"
 github "rsilvers129/CGMBLEKit" "dev"
 github "i-schuetz/SwiftCharts" == 0.6.2
 github "rsilvers129/dexcom-share-client-swift" "carthage-recursive"
 github "rsilvers129/G4ShareSpy" "fix-cartfile"
+=======
+github "rsilvers129/LoopKit/LoopKit" "FPU-dev"
+github "LoopKit/CGMBLEKit" "dev"
+github "i-schuetz/SwiftCharts" == 0.6.2
+github "LoopKit/dexcom-share-client-swift" "carthage-recursive"
+github "LoopKit/G4ShareSpy" "fix-cartfile"
+>>>>>>> 64d9f1df... Fix issue report crash, and track pump frequency. (#821)
 github "rsilvers129/rileylink_ios" "FPU-dev"
 github "LoopKit/Amplitude-iOS" "decreepify"
 github "rsilvers129/spike-client-swift-master" "FPU-dev"
