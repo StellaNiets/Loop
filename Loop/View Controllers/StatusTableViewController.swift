@@ -884,6 +884,8 @@ final class StatusTableViewController: ChartsTableViewController {
         guard let carbVC = segue.source as? CarbEntryEditViewController, let updatedEntry = carbVC.updatedCarbEntry else {
             return
         }
+        
+        // RSS - Do we need to do an addCarbEntry here for the Protain and Fat portion?
 
         deviceManager.loopManager.addCarbEntryAndRecommendBolus(updatedEntry) { (result) -> Void in
             DispatchQueue.main.async {
