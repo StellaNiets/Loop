@@ -516,17 +516,18 @@ final class CarbAbsorptionViewController: ChartsTableViewController, Identifiabl
     /// RSS - This triggers when you edit an existing carb value and hit save.
     
     @IBAction func unwindFromEditing(_ segue: UIStoryboardSegue) {
-        guard let editVC = segue.source as? CarbEntryEditViewController,
-            let updatedEntry = editVC.updatedCarbEntry
-        else {
-            return
+        guard let editVC = segue.source as? CarbEntryEditViewController
+            else {
+                return
         }
-
-        if #available(iOS 12.0, *), editVC.originalCarbEntry == nil {
-            let interaction = INInteraction(intent: NewCarbEntryIntent(), response: nil)
-            interaction.donate { (error) in
-                if let error = error {
-                    os_log(.error, "Failed to donate intent: %{public}@", String(describing: error))
+        
+        if let updatedEntry = editVC.updatedCarbEntry { // Had some carb else else this returns nil
+            if #available(iOS 12.0, *), editVC.originalCarbEntry == nil {
+                let interaction = INInteraction(intent: NewCarbEntryIntent(), response: nil)
+                interaction.donate { (error) in
+                    if let error = error {
+                        os_log(.error, "Failed to donate intent: %{public}@", String(describing: error))
+                    }
                 }
             }
             
@@ -545,6 +546,36 @@ final class CarbAbsorptionViewController: ChartsTableViewController, Identifiabl
                     }
                 }
             }
+            
+            deviceManager.loopManager.addCarbEntryAndRecommendBolus(updatedEntry, replacing: editVC.originalCarbEntry) { (result) in
+                DispatchQueue.main.async {
+                    switch result {
+                    case .success(let recommendation):
+                        if self.active && self.visible, let bolus = recommendation?.amount, bolus > 0 {
+                            self.performSegue(withIdentifier: BolusViewController.className, sender: recommendation)
+                        }
+                    case .failure(let error):
+                        // Ignore bolus wizard errors
+                        if error is CarbStore.CarbStoreError {
+                            self.presentAlertController(with: error)
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Now run a second time for the fat and protein...
+        guard let editFPUVC = segue.source as? CarbEntryEditViewController
+            else {
+                return
+            }
+        
+        editFPUVC.FPCaloriesRatio = deviceManager.loopManager.settings.fpuRatio ?? 150.0 // Safer default.
+        editFPUVC.onsetDelay = deviceManager.loopManager.settings.fpuDelay ?? 60.0
+
+        guard let updatedFPUEntry = editFPUVC.updatedFPCarbEntry
+            else {
+                return
         }
         
         // Now run a second time for the fat and protein...

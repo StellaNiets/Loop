@@ -903,8 +903,6 @@ final class StatusTableViewController: ChartsTableViewController {
         guard let carbVC = segue.source as? CarbEntryEditViewController, let updatedEntry = carbVC.updatedCarbEntry else {
             return
         }
-        
-        // RSS - Do we need to do an addCarbEntry here for the Protain and Fat portion?
 
         if #available(iOS 12.0, *) {
             let interaction = INInteraction(intent: NewCarbEntryIntent(), response: nil)
@@ -914,8 +912,8 @@ final class StatusTableViewController: ChartsTableViewController {
                 }
             }
         }
-
         // RSS - This is were carb is entered for a new entry.
+        
         deviceManager.loopManager.addCarbEntryAndRecommendBolus(updatedEntry) { (result) -> Void in
             DispatchQueue.main.async {
                 switch result {
@@ -935,7 +933,7 @@ final class StatusTableViewController: ChartsTableViewController {
             }
         }
         
-        carbVC.FPCaloriesRatio = deviceManager.loopManager.settings.fpuRatio ?? 150.0
+        carbVC.FPCaloriesRatio = deviceManager.loopManager.settings.fpuRatio ?? 150.0 // Safer default.
         carbVC.onsetDelay = deviceManager.loopManager.settings.fpuDelay ?? 60.0
         
        // RSS - Repeat for the fat and protein portion...
