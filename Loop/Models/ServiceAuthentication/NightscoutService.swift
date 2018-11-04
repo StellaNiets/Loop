@@ -8,36 +8,29 @@
 
 import Foundation
 import NightscoutUploadKit
-import LoopKit
-import LoopKitUI
 
 
 // Encapsulates a Nightscout site and its authentication
-class NightscoutService: ServiceAuthenticationUI {
-    var credentialValues: [String?]
-
-    var credentialFormFields: [ServiceCredential]
+class NightscoutService: ServiceAuthentication {
+    var credentials: [ServiceCredential]
 
     let title: String = NSLocalizedString("Nightscout", comment: "The title of the Nightscout service")
 
     init(siteURL: URL?, APISecret: String?) {
-        credentialValues = [
-            siteURL?.absoluteString,
-            APISecret,
-        ]
-
-        credentialFormFields = [
+        credentials = [
             ServiceCredential(
                 title: NSLocalizedString("Site URL", comment: "The title of the nightscout site URL credential"),
                 placeholder: NSLocalizedString("https://mysite.azurewebsites.net", comment: "The placeholder text for the nightscout site URL credential"),
                 isSecret: false,
-                keyboardType: .URL
+                keyboardType: .URL,
+                value: siteURL?.absoluteString
             ),
             ServiceCredential(
                 title: NSLocalizedString("API Secret", comment: "The title of the nightscout API secret credential"),
                 placeholder: nil,
                 isSecret: false,
-                keyboardType: .asciiCapable
+                keyboardType: .asciiCapable,
+                value: APISecret
             )
         ]
 
@@ -55,7 +48,7 @@ class NightscoutService: ServiceAuthenticationUI {
     }
 
     var siteURL: URL? {
-        if let URLString = credentialValues[0], !URLString.isEmpty {
+        if let URLString = credentials[0].value, !URLString.isEmpty {
             return URL(string: URLString)
         }
 
@@ -63,7 +56,7 @@ class NightscoutService: ServiceAuthenticationUI {
     }
 
     var APISecret: String? {
-        return credentialValues[1]
+        return credentials[1].value
     }
 
     var isAuthorized: Bool = true
@@ -83,6 +76,8 @@ class NightscoutService: ServiceAuthenticationUI {
     }
 
     func reset() {
+        credentials[0].reset()
+        credentials[1].reset()
         isAuthorized = false
         uploader = nil
     }

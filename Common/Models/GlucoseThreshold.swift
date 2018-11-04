@@ -9,7 +9,7 @@
 import Foundation
 import HealthKit
 
-struct GlucoseThreshold: Equatable, RawRepresentable {
+struct GlucoseThreshold: RawRepresentable {
     typealias RawValue = [String: Any]
     
     let value: Double
@@ -37,5 +37,12 @@ struct GlucoseThreshold: Equatable, RawRepresentable {
             "value": value,
             "units": unit.unitString
         ]
+    }
+}
+
+
+extension GlucoseThreshold: Equatable {
+    static func ==(lhs: GlucoseThreshold, rhs: GlucoseThreshold) -> Bool {
+        return lhs.value == rhs.value
     }
 }

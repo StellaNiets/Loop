@@ -4,12 +4,11 @@
 //
 //  Copyright © 2017 LoopKit Authors. All rights reserved.
 //
-//  Fat-Protein Unit code by Robert Silvers, 10/2018.
 
 import LoopKit
 
 
-struct LoopSettings: Equatable {
+struct LoopSettings {
     var dosingEnabled = false
 
     let dynamicCarbAbsorptionEnabled = true
@@ -21,20 +20,16 @@ struct LoopSettings: Equatable {
     var maximumBolus: Double?
 
     var suspendThreshold: GlucoseThreshold? = nil
-    
-    var fpuRatio: Double?
-    
-    var fpuDelay: Double?
 
     var retrospectiveCorrectionEnabled = true
     
     var integralRetrospectiveCorrectionEnabled = true
 
-    /// The interval over which to aggregate changes in glucose for retrospective correction
-    let retrospectiveCorrectionGroupingInterval = TimeInterval(minutes: 30)
+    var integralRetrospectiveCorrectionEnabled = true
 
     /// The maximum duration over which to integrate retrospective correction changes
     let retrospectiveCorrectionIntegrationInterval = TimeInterval(minutes: 180)
+    let retrospectiveCorrectionInterval = TimeInterval(minutes: 30)
 
     /// The amount of time since a given date that data should be considered valid
     let recencyInterval = TimeInterval(minutes: 15)
@@ -70,10 +65,6 @@ extension LoopSettings: RawRepresentable {
         self.maximumBasalRatePerHour = rawValue["maximumBasalRatePerHour"] as? Double
 
         self.maximumBolus = rawValue["maximumBolus"] as? Double
-        
-        self.fpuRatio = rawValue["fpuRatio"] as? Double
-        
-        self.fpuDelay = rawValue["fpuDelay"] as? Double
 
         if let rawThreshold = rawValue["minimumBGGuard"] as? GlucoseThreshold.RawValue {
             self.suspendThreshold = GlucoseThreshold(rawValue: rawThreshold)
@@ -100,8 +91,6 @@ extension LoopSettings: RawRepresentable {
         raw["maximumBasalRatePerHour"] = maximumBasalRatePerHour
         raw["maximumBolus"] = maximumBolus
         raw["minimumBGGuard"] = suspendThreshold?.rawValue
-        raw["fpuRatio"] = fpuRatio
-        raw["fpuDelay"] = fpuDelay
 
         return raw
     }

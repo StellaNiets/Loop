@@ -14,7 +14,7 @@ import HealthKit
 extension HKUnit {
     // A formatting helper for determining the preferred decimal style for a given unit
     var preferredFractionDigits: Int {
-        if self == .milligramsPerDeciliter {
+        if self.unitString == "mg/dL" {
             return 0
         } else {
             return 1
@@ -45,7 +45,7 @@ extension HKUnit {
 
     /// An example value for the "ideal" target
     var glucoseExampleTargetValue: Double {
-        if self == .milligramsPerDeciliter {
+        if unitString == "mg/dL" {
             return 100
         } else {
             return 5.5
@@ -54,7 +54,7 @@ extension HKUnit {
 
     /// The smallest value expected to be visible on a chart
     var chartableIncrement: Double {
-        if self == .milligramsPerDeciliter {
+        if unitString == "mg/dL" {
             return 1
         } else {
             return 1 / 25

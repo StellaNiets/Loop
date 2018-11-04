@@ -2,7 +2,6 @@
   "images" : [
     {
       "idiom" : "watch",
-      "filename" : "loop-aging@42mm.png",
       "scale" : "2x"
     },
     {
@@ -13,18 +12,9 @@
     },
     {
       "idiom" : "watch",
-      "scale" : "2x",
-      "screen-width" : ">161"
-    },
-    {
-      "idiom" : "watch",
-      "scale" : "2x",
-      "screen-width" : ">145"
-    },
-    {
-      "idiom" : "watch",
-      "scale" : "2x",
-      "screen-width" : ">183"
+      "filename" : "loop-aging@42mm.png",
+      "screen-width" : ">145",
+      "scale" : "2x"
     }
   ],
   "info" : {

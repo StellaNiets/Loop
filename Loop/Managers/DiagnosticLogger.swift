@@ -108,7 +108,7 @@ final class CategoryLogger {
     }
 
     func `default`(_ message: String) {
-        systemLog.default("%{public}@", message)
+        systemLog.info("%{public}@", message)
         remoteLog(.default, message: message)
     }
 

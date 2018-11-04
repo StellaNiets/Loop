@@ -102,7 +102,7 @@ final class StatusExtensionDataManager {
             context.batteryPercentage = dataManager.pumpManager?.pumpBatteryChargeRemaining
             context.reservoirCapacity = dataManager.pumpManager?.pumpReservoirCapacity
 
-            if let sensorInfo = dataManager.cgmManager?.sensorState {
+            if let sensorInfo = dataManager.sensorInfo {
                 context.sensor = SensorDisplayableContext(
                     isStateValid: sensorInfo.isStateValid,
                     stateDescription: sensorInfo.stateDescription,

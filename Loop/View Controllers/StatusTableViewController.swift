@@ -5,11 +5,9 @@
 //  Created by Nathan Racklyeft on 9/6/15.
 //  Copyright © 2015 Nathan Racklyeft. All rights reserved.
 //
-//  Fat-Protein Unit code by Robert Silvers, 10/2018.
 
 import UIKit
 import HealthKit
-import Intents
 import LoopKit
 import LoopKitUI
 import LoopUI
@@ -167,8 +165,6 @@ final class StatusTableViewController: ChartsTableViewController {
             refreshContext.update(with: .status)
         }
     }
-    
-    //var dataManager: DeviceDataManager! // RSS
 
     // Toggles the display mode based on the screen aspect ratio. Should not be updated outside of reloadData().
     private var landscapeMode = false
@@ -363,6 +359,7 @@ final class StatusTableViewController: ChartsTableViewController {
 
         workoutMode = deviceManager.loopManager.settings.glucoseTargetRangeSchedule?.overrideEnabledForContext(.workout)
         preMealMode = deviceManager.loopManager.settings.glucoseTargetRangeSchedule?.overrideEnabledForContext(.preMeal)
+        remoteTempTargetMode = deviceManager.loopManager.settings.glucoseTargetRangeSchedule?.overrideEnabledForContext(.remoteTempTarget)
 
         reloadGroup.notify(queue: .main) {
             /// Update the chart data
@@ -418,7 +415,7 @@ final class StatusTableViewController: ChartsTableViewController {
                     hudView.glucoseHUD.setGlucoseQuantity(glucose.quantity.doubleValue(for: self.charts.glucoseUnit),
                         at: glucose.startDate,
                         unit: self.charts.glucoseUnit,
-                        sensor: self.deviceManager.cgmManager?.sensorState
+                        sensor: self.deviceManager.sensorInfo
                     )
                 }
 
@@ -636,6 +633,14 @@ final class StatusTableViewController: ChartsTableViewController {
             }
         }
     }
+    
+    private var remoteTempTargetMode: Bool? = nil {
+        didSet {
+            guard oldValue != remoteTempTargetMode else {
+                return
+            }
+        }
+    }
 
     // MARK: - Table view data source
 
@@ -845,15 +850,6 @@ final class StatusTableViewController: ChartsTableViewController {
 
     // MARK: - Actions
 
-    override func restoreUserActivityState(_ activity: NSUserActivity) {
-        switch activity.activityType {
-        case NSUserActivity.newCarbEntryActivityType:
-            performSegue(withIdentifier: CarbEntryEditViewController.className, sender: activity)
-        default:
-            break
-        }
-    }
-
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         super.prepare(for: segue, sender: sender)
 
@@ -873,10 +869,6 @@ final class StatusTableViewController: ChartsTableViewController {
         case let vc as CarbEntryEditViewController:
             vc.defaultAbsorptionTimes = deviceManager.loopManager.carbStore.defaultAbsorptionTimes
             vc.preferredUnit = deviceManager.loopManager.carbStore.preferredUnit
-
-            if let activity = sender as? NSUserActivity {
-                vc.restoreUserActivityState(activity)
-            }
         case let vc as InsulinDeliveryTableViewController:
             vc.doseStore = deviceManager.loopManager.doseStore
             vc.hidesBottomBarWhenPushed = true
@@ -897,23 +889,11 @@ final class StatusTableViewController: ChartsTableViewController {
     /// Unwind segue action from the CarbEntryEditViewController
     ///
     /// - parameter segue: The unwind segue
-    /// RSS - This triggers when you enter carb and hit save.
-    
     @IBAction func unwindFromEditing(_ segue: UIStoryboardSegue) {
         guard let carbVC = segue.source as? CarbEntryEditViewController, let updatedEntry = carbVC.updatedCarbEntry else {
             return
         }
 
-        if #available(iOS 12.0, *) {
-            let interaction = INInteraction(intent: NewCarbEntryIntent(), response: nil)
-            interaction.donate { [weak self] (error) in
-                if let error = error {
-                    self?.log.error("Failed to donate intent: %{public}@", String(describing: error))
-                }
-            }
-        }
-        // RSS - This is were carb is entered for a new entry.
-        
         deviceManager.loopManager.addCarbEntryAndRecommendBolus(updatedEntry) { (result) -> Void in
             DispatchQueue.main.async {
                 switch result {
@@ -922,31 +902,6 @@ final class StatusTableViewController: ChartsTableViewController {
                         self.bolusState = .recommended
                         self.performSegue(withIdentifier: BolusViewController.className, sender: recommendation)
                     }
-                case .failure(let error):
-                    // Ignore bolus wizard errors
-                    if error is CarbStore.CarbStoreError {
-                        self.presentAlertController(with: error)
-                    } else {
-                        self.deviceManager.logger.addError(error, fromSource: "Bolus")
-                    }
-                }
-            }
-        }
-        
-        carbVC.FPCaloriesRatio = deviceManager.loopManager.settings.fpuRatio ?? 150.0 // Safer default.
-        carbVC.onsetDelay = deviceManager.loopManager.settings.fpuDelay ?? 60.0
-        
-       // RSS - Repeat for the fat and protein portion...
-        guard let updatedFPEntry = carbVC.updatedFPCarbEntry else {
-            return
-        }
-        
-        deviceManager.loopManager.addCarbEntryAndRecommendBolus(updatedFPEntry) { (result) -> Void in
-            DispatchQueue.main.async {
-                switch result {
-                case .success:
-                    // Never give bolus for fat and protein.
-                    print("Not recommending bolus for fat or protein.")
                 case .failure(let error):
                     // Ignore bolus wizard errors
                     if error is CarbStore.CarbStoreError {
@@ -1044,7 +999,7 @@ final class StatusTableViewController: ChartsTableViewController {
             let glucoseTapGestureRecognizer = UITapGestureRecognizer(target: self, action: #selector(openCGMApp(_:)))
             hudView.glucoseHUD.addGestureRecognizer(glucoseTapGestureRecognizer)
             
-            if deviceManager.cgmManager?.appURL != nil {
+            if deviceManager.cgm?.appURL != nil {
                 hudView.glucoseHUD.accessibilityHint = NSLocalizedString("Launches CGM app", comment: "Glucose HUD accessibility hint")
             }
 
@@ -1073,7 +1028,7 @@ final class StatusTableViewController: ChartsTableViewController {
     }
 
     @objc private func openCGMApp(_: Any) {
-        if let url = deviceManager.cgmManager?.appURL, UIApplication.shared.canOpenURL(url) {
+        if let url = deviceManager.cgm?.appURL, UIApplication.shared.canOpenURL(url) {
             UIApplication.shared.open(url)
         }
     }

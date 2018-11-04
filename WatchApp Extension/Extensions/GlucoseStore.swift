@@ -11,5 +11,15 @@ import LoopKit
 import WatchConnectivity
 
 extension GlucoseStore {
-
+    func maybeRequestGlucoseBackfill() {
+        getCachedGlucoseSamples(start: .EarliestGlucoseCutoff) { samples in
+            let latestDate = samples.last?.startDate ?? .EarliestGlucoseCutoff
+            if latestDate < .StaleGlucoseCutoff {
+                let userInfo = GlucoseBackfillRequestUserInfo(startDate: latestDate)
+                WCSession.default.sendGlucoseBackfillRequestMessage(userInfo) { (context) in
+                    self.addGlucose(context.samples) { _ in }
+                }
+            }
+        }
+    }
 }

@@ -9,19 +9,12 @@
 import WatchConnectivity
 import WatchKit
 import HealthKit
-import Intents
 import os
-import os.log
 import UserNotifications
 
 
 final class ExtensionDelegate: NSObject, WKExtensionDelegate {
     private(set) lazy var loopManager = LoopDataManager()
-
-    private let log = OSLog(category: "ExtensionDelegate")
-
-    private var observers: [NSKeyValueObservation] = []
-    private var notifications: [NSObjectProtocol] = []
 
     static func shared() -> ExtensionDelegate {
         return WKExtension.shared().extensionDelegate
@@ -36,42 +29,20 @@ final class ExtensionDelegate: NSObject, WKExtensionDelegate {
         // It seems, according to [this sample code](https://developer.apple.com/library/prerelease/content/samplecode/QuickSwitch/Listings/QuickSwitch_WatchKit_Extension_ExtensionDelegate_swift.html#//apple_ref/doc/uid/TP40016647-QuickSwitch_WatchKit_Extension_ExtensionDelegate_swift-DontLinkElementID_8)
         // that WCSession activation and delegation and WKWatchConnectivityRefreshBackgroundTask don't have any determinism,
         // and that KVO is the "recommended" way to deal with it.
-        observers.append(session.observe(\WCSession.activationState) { [weak self] (session, change) in
-            self?.log.default("WCSession.applicationState did change to %d", session.activationState.rawValue)
-
-            DispatchQueue.main.async {
-                self?.completePendingConnectivityTasksIfNeeded()
-            }
-        })
-        observers.append(session.observe(\WCSession.hasContentPending) { [weak self] (session, change) in
-            self?.log.default("WCSession.hasContentPending did change to %d", session.hasContentPending)
-
-            DispatchQueue.main.async {
-                self?.loopManager.sendDidUpdateContextNotificationIfNecessary()
-                self?.completePendingConnectivityTasksIfNeeded()
-            }
-        })
-
-        notifications.append(NotificationCenter.default.addObserver(forName: LoopDataManager.didUpdateContextNotification, object: loopManager, queue: nil) { [weak self] (_) in
-            DispatchQueue.main.async {
-                self?.loopManagerDidUpdateContext()
-            }
-        })
+        session.addObserver(self, forKeyPath: #keyPath(WCSession.activationState), options: [], context: nil)
+        session.addObserver(self, forKeyPath: #keyPath(WCSession.hasContentPending), options: [], context: nil)
 
         session.activate()
     }
 
-    deinit {
-        for notification in notifications {
-            NotificationCenter.default.removeObserver(notification)
+    override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
+        DispatchQueue.main.async {
+            self.completePendingConnectivityTasksIfNeeded()
         }
     }
 
     func applicationDidFinishLaunching() {
         UNUserNotificationCenter.current().delegate = self
-        if #available(watchOSApplicationExtension 5.0, *) {
-            INRelevantShortcutStore.default.registerShortcuts()
-        }
     }
 
     func applicationDidBecomeActive() {
@@ -84,23 +55,22 @@ final class ExtensionDelegate: NSObject, WKExtensionDelegate {
         UserDefaults.standard.startOnChartPage = (WKExtension.shared().visibleInterfaceController as? ChartHUDController) != nil
     }
 
-    // Presumably the main thread?
     func handle(_ backgroundTasks: Set<WKRefreshBackgroundTask>) {
-        loopManager.requestGlucoseBackfillIfNecessary()
+        loopManager.glucoseStore.maybeRequestGlucoseBackfill()
 
         for task in backgroundTasks {
             switch task {
             case is WKApplicationRefreshBackgroundTask:
-                log.default("Processing WKApplicationRefreshBackgroundTask")
+                os_log("Processing WKApplicationRefreshBackgroundTask")
                 break
             case let task as WKSnapshotRefreshBackgroundTask:
-                log.default("Processing WKSnapshotRefreshBackgroundTask")
+                os_log("Processing WKSnapshotRefreshBackgroundTask")
                 task.setTaskCompleted(restoredDefaultState: false, estimatedSnapshotExpiration: Date(timeIntervalSinceNow: TimeInterval(minutes: 5)), userInfo: nil)
                 return  // Don't call the standard setTaskCompleted handler
             case is WKURLSessionRefreshBackgroundTask:
                 break
             case let task as WKWatchConnectivityRefreshBackgroundTask:
-                log.default("Processing WKWatchConnectivityRefreshBackgroundTask")
+                os_log("Processing WKWatchConnectivityRefreshBackgroundTask")
 
                 pendingConnectivityTasks.append(task)
 
@@ -127,7 +97,6 @@ final class ExtensionDelegate: NSObject, WKExtensionDelegate {
     private func completePendingConnectivityTasksIfNeeded() {
         if WCSession.default.activationState == .activated && !WCSession.default.hasContentPending {
             pendingConnectivityTasks.forEach { (task) in
-                self.log.default("Completing WKWatchConnectivityRefreshBackgroundTask %{public}@", String(describing: task))
                 if #available(watchOSApplicationExtension 4.0, *) {
                     task.setTaskCompletedWithSnapshot(false)
                 } else {
@@ -138,57 +107,51 @@ final class ExtensionDelegate: NSObject, WKExtensionDelegate {
         }
     }
 
-    func handle(_ userActivity: NSUserActivity) {
-        if #available(watchOSApplicationExtension 5.0, *) {
-            switch userActivity.activityType {
-            case NSUserActivity.newCarbEntryActivityType, NSUserActivity.didAddCarbEntryOnWatchActivityType:
-                if let statusController = WKExtension.shared().visibleInterfaceController as? HUDInterfaceController {
-                    statusController.addCarbs()
+    // Main queue only
+    private(set) var activeContext: WatchContext? {
+        didSet {
+            loopManager.activeContext = activeContext
+
+            if WKExtension.shared().applicationState != .active {
+                WKExtension.shared().scheduleSnapshotRefresh(withPreferredDate: Date(), userInfo: nil) { (_) in }
+            }
+
+            // Update complication data if needed
+            let server = CLKComplicationServer.sharedInstance()
+            for complication in server.activeComplications ?? [] {
+                // In watchOS 2, we forced a timeline reload every 8 hours because attempting to extend it indefinitely seemed to lead to the complication "freezing".
+                if UserDefaults.standard.complicationDataLastRefreshed.timeIntervalSinceNow < TimeInterval(hours: -8) {
+                    UserDefaults.standard.complicationDataLastRefreshed = Date()
+                    os_log("Reloading complication timeline")
+                    server.reloadTimeline(for: complication)
+                } else {
+                    os_log("Extending complication timeline")
+                    // TODO: Switch this back to extendTimeline if things are working correctly.
+                    // Time Travel appears to be disabled by default in watchOS 3 anyway
+                    server.reloadTimeline(for: complication)
                 }
-            default:
-                break
             }
         }
     }
 
-    private func updateContext(_ data: [String: Any]) {
-        guard let context = WatchContext(rawValue: data) else {
-            log.error("Could not decode WatchContext: %{public}@", data)
-            return
-        }
+    private lazy var healthStore = HKHealthStore()
 
-        if context.preferredGlucoseUnit == nil {
-            let type = HKQuantityType.quantityType(forIdentifier: .bloodGlucose)!
-            loopManager.healthStore.preferredUnits(for: [type]) { (units, error) in
-                context.preferredGlucoseUnit = units[type]
+    fileprivate func updateContext(_ data: [String: Any]) {
+        if let context = WatchContext(rawValue: data as WatchContext.RawValue) {
+            if context.preferredGlucoseUnit == nil {
+                let type = HKQuantityType.quantityType(forIdentifier: .bloodGlucose)!
+                healthStore.preferredUnits(for: [type]) { (units, error) in
+                    context.preferredGlucoseUnit = units[type]
 
+                    DispatchQueue.main.async {
+                        self.activeContext = context
+                    }
+                }
+            } else {
                 DispatchQueue.main.async {
-                    self.loopManager.updateContext(context)
+                    self.activeContext = context
                 }
             }
-        } else {
-            DispatchQueue.main.async {
-                self.loopManager.updateContext(context)
-            }
-        }
-    }
-
-    private func loopManagerDidUpdateContext() {
-        dispatchPrecondition(condition: .onQueue(.main))
-
-        if WKExtension.shared().applicationState != .active {
-            WKExtension.shared().scheduleSnapshotRefresh(withPreferredDate: Date(), userInfo: nil) { (error) in
-                if let error = error {
-                    self.log.error("scheduleSnapshotRefresh error: %{public}@", String(describing: error))
-                }
-            }
-        }
-
-        // Update complication data if needed
-        let server = CLKComplicationServer.sharedInstance()
-        for complication in server.activeComplications ?? [] {
-            log.default("Reloading complication timeline")
-            server.reloadTimeline(for: complication)
         }
     }
 }
@@ -202,30 +165,13 @@ extension ExtensionDelegate: WCSessionDelegate {
     }
 
     func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String : Any]) {
-        log.default("didReceiveApplicationContext")
         updateContext(applicationContext)
     }
 
-    // This method is called on a background thread of your app
     func session(_ session: WCSession, didReceiveUserInfo userInfo: [String : Any] = [:]) {
-        let name = userInfo["name"] as? String ?? "WatchContext"
-
-        log.default("didReceiveUserInfo: %{public}@", name)
-
-        switch name {
-        case LoopSettingsUserInfo.name:
-            if let settings = LoopSettingsUserInfo(rawValue: userInfo)?.settings {
-                DispatchQueue.main.async {
-                    self.loopManager.settings = settings
-                }
-            } else {
-                log.error("Could not decode LoopSettingsUserInfo: %{public}@", userInfo)
-            }
-        case "WatchContext":
-            // WatchContext is the only userInfo type without a "name" key. This isn't a great heuristic.
+        // WatchContext is the only userInfo type without a "name" key. This isn't a great heuristic.
+        if !(userInfo["name"] is String) {
             updateContext(userInfo)
-        default:
-            break
         }
     }
 }
@@ -244,8 +190,6 @@ extension ExtensionDelegate {
     ///
     /// - parameter error: The error whose contents to display
     func present(_ error: Error) {
-        dispatchPrecondition(condition: .onQueue(.main))
-
         WKExtension.shared().rootInterfaceController?.presentAlert(withTitle: error.localizedDescription, message: (error as NSError).localizedRecoverySuggestion ?? (error as NSError).localizedFailureReason, preferredStyle: .alert, actions: [WKAlertAction.dismissAction()])
     }
 }

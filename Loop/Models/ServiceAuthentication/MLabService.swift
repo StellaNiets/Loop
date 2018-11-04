@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import LoopKit
 
 
 private let mLabAPIHost = URL(string: "https://api.mongolab.com/api/1/databases")!

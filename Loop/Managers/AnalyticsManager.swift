@@ -5,11 +5,9 @@
 //  Created by Nathan Racklyeft on 4/28/16.
 //  Copyright © 2016 Nathan Racklyeft. All rights reserved.
 //
-//  Fat-Protein Unit code by Robert Silvers, 10/2018.
 
 import Foundation
 import Amplitude
-import LoopKit
 
 
 final class AnalyticsManager: IdentifiableClass {
@@ -110,14 +108,6 @@ final class AnalyticsManager: IdentifiableClass {
 
         if newValue.suspendThreshold != oldValue.suspendThreshold {
             logEvent("Minimum BG Guard change")
-        }
-        
-        if newValue.fpuRatio != oldValue.fpuRatio {
-            logEvent("FPU Ratio change")
-        }
-        
-        if newValue.fpuDelay != oldValue.fpuDelay {
-            logEvent("FPU Delay change")
         }
 
         if newValue.dosingEnabled != oldValue.dosingEnabled {

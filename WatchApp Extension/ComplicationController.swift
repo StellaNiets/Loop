@@ -19,7 +19,7 @@ final class ComplicationController: NSObject, CLKComplicationDataSource {
     }
     
     func getTimelineStartDate(for complication: CLKComplication, withHandler handler: @escaping (Date?) -> Void) {
-        if let date = ExtensionDelegate.shared().loopManager.activeContext?.glucoseDate {
+        if let date = ExtensionDelegate.shared().activeContext?.glucoseDate {
             handler(date)
         } else {
             handler(nil)
@@ -27,7 +27,7 @@ final class ComplicationController: NSObject, CLKComplicationDataSource {
     }
     
     func getTimelineEndDate(for complication: CLKComplication, withHandler handler: @escaping (Date?) -> Void) {
-        if let date = ExtensionDelegate.shared().loopManager.activeContext?.glucoseDate {
+        if let date = ExtensionDelegate.shared().activeContext?.glucoseDate {
             handler(date)
         } else {
             handler(nil)
@@ -45,15 +45,13 @@ final class ComplicationController: NSObject, CLKComplicationDataSource {
     func getCurrentTimelineEntry(for complication: CLKComplication, withHandler handler: (@escaping (CLKComplicationTimelineEntry?) -> Void)) {
         let entry: CLKComplicationTimelineEntry?
 
-        if  let context = ExtensionDelegate.shared().loopManager.activeContext,
+        if  let context = ExtensionDelegate.shared().activeContext,
             let glucoseDate = context.glucoseDate,
             glucoseDate.timeIntervalSinceNow.minutes >= -15,
             let template = CLKComplicationTemplate.templateForFamily(complication.family, from: context)
         {
             template.tintColor = UIColor.tintColor
             entry = CLKComplicationTimelineEntry(date: glucoseDate, complicationTemplate: template)
-        } else if let image = CLKComplicationTemplate.imageTemplate(for: complication.family) {
-            entry = CLKComplicationTimelineEntry(date: Date(), complicationTemplate: image)
         } else {
             entry = nil
         }
@@ -70,25 +68,63 @@ final class ComplicationController: NSObject, CLKComplicationDataSource {
         // Call the handler with the timeline entries after to the given date
         let entries: [CLKComplicationTimelineEntry]?
 
-        if  let context = ExtensionDelegate.shared().loopManager.activeContext,
-            let glucoseDate = context.glucoseDate
+        if  let context = ExtensionDelegate.shared().activeContext,
+            let glucoseDate = context.glucoseDate,
+            glucoseDate.timeIntervalSince(date) > 0,
+            let template = CLKComplicationTemplate.templateForFamily(complication.family, from: context)
         {
-            if glucoseDate.timeIntervalSince(date) > 0,
-                let template = CLKComplicationTemplate.templateForFamily(complication.family, from: context)
-            {
-                template.tintColor = UIColor.tintColor
-                entries = [CLKComplicationTimelineEntry(date: glucoseDate, complicationTemplate: template)]
-            } else {
-                entries = []
-            }
-
-            if let image = CLKComplicationTemplate.imageTemplate(for: complication.family) {
-                entries?.append(CLKComplicationTimelineEntry(date: glucoseDate.addingTimeInterval(.hours(1)), complicationTemplate: image))
-            }
+            template.tintColor = UIColor.tintColor
+            entries = [CLKComplicationTimelineEntry(date: glucoseDate, complicationTemplate: template)]
         } else {
             entries = nil
         }
 
         handler(entries)
+    }
+
+    // MARK: - Placeholder Templates
+
+    func getLocalizableSampleTemplate(for complication: CLKComplication, withHandler handler: @escaping (CLKComplicationTemplate?) -> Void) {
+
+        let template: CLKComplicationTemplate?
+        
+        let glucoseText = CLKSimpleTextProvider.localizableTextProvider(withStringsFileTextKey: "120↘︎", shortTextKey: "120")
+        let timeText = CLKRelativeDateTextProvider(date: Date(), style: .natural, units: .minute)
+
+        switch complication.family {
+        case .graphicCorner, .graphicCircular, .graphicRectangular, .graphicBezel:
+            template = nil
+        case .modularSmall:
+            let modularSmall = CLKComplicationTemplateModularSmallStackText()
+            modularSmall.line1TextProvider = glucoseText
+            modularSmall.line2TextProvider = timeText
+            template = modularSmall
+        case .modularLarge:
+            let modularSmall = CLKComplicationTemplateModularLargeTallBody()
+            modularSmall.bodyTextProvider = glucoseText
+            modularSmall.headerTextProvider = timeText
+            template = modularSmall
+        case .circularSmall:
+            let circularSmall = CLKComplicationTemplateCircularSmallSimpleText()
+            circularSmall.textProvider = glucoseText
+            template = circularSmall
+        case .extraLarge:
+            let extraLarge = CLKComplicationTemplateExtraLargeStackText()
+            extraLarge.line1TextProvider = glucoseText
+            extraLarge.line2TextProvider = timeText
+            template = extraLarge
+        case .utilitarianSmall, .utilitarianSmallFlat:
+            let utilitarianSmallFlat = CLKComplicationTemplateUtilitarianSmallFlat()
+            utilitarianSmallFlat.textProvider = glucoseText
+            template = utilitarianSmallFlat
+        case .utilitarianLarge:
+            let utilitarianLarge = CLKComplicationTemplateUtilitarianLargeFlat()
+            let eventualGlucoseText = CLKSimpleTextProvider.localizableTextProvider(withStringsFileTextKey: "75")
+            utilitarianLarge.textProvider = CLKSimpleTextProvider.localizableTextProvider(withStringsFileFormatKey: "UtilitarianLargeFlat", textProviders: [glucoseText, eventualGlucoseText, CLKTimeTextProvider(date: Date())])
+            template = utilitarianLarge
+        }
+
+        template?.tintColor = UIColor.tintColor
+        handler(template)
     }
 }

@@ -6,28 +6,21 @@
 //
 
 import Foundation
-import LoopKit
-import LoopKitUI
 
 
-class LogglyService: ServiceAuthenticationUI {
-    var credentialValues: [String?]
-
-    var credentialFormFields: [ServiceCredential]
+class LogglyService: ServiceAuthentication {
+    var credentials: [ServiceCredential]
 
     let title: String = NSLocalizedString("Loggly", comment: "The title of the loggly service")
 
     init(customerToken: String?) {
-        credentialValues = [
-            customerToken
-        ]
-
-        credentialFormFields = [
+        credentials = [
             ServiceCredential(
                 title: NSLocalizedString("Customer Token", comment: "The title of the Loggly customer token credential"),
                 placeholder: nil,
                 isSecret: false,
-                keyboardType: .asciiCapable
+                keyboardType: .asciiCapable,
+                value: customerToken
             )
         ]
 
@@ -39,7 +32,7 @@ class LogglyService: ServiceAuthenticationUI {
     var isAuthorized: Bool = true
 
     var customerToken: String? {
-        return credentialValues[0]
+        return credentials[0].value
     }
 
     func verify(_ completion: @escaping (Bool, Error?) -> Void) {
@@ -55,6 +48,7 @@ class LogglyService: ServiceAuthenticationUI {
     }
 
     func reset() {
+        credentials[0].reset()
         isAuthorized = false
         client = nil
     }
